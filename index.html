@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>For You</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#f6e9e0;--dim:#d9c3ba;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{background:#0b0610;color:var(--cream);font-family:'Inter',sans-serif;display:flex;flex-direction:column;align-items:center;padding:calc(2vh + env(safe-area-inset-top,0px)) 12px calc(5vh + env(safe-area-inset-bottom,0px));overflow-x:hidden}
+.glow{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 60% 40% at 50% 30%,rgba(236,72,153,.3),rgba(120,40,160,.12) 55%,transparent 75%);opacity:.3;transition:opacity 2.5s}
+body.bloomed .glow{opacity:1}
+.view{position:relative;width:100%;max-width:520px;height:64vh;min-height:340px;touch-action:pan-y}
+.view canvas{display:block;width:100%;height:100%;cursor:grab}
+.hint{position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);opacity:0;transition:opacity 1s 4s;pointer-events:none}
+body.bloomed .hint{opacity:.6}
+.loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;transition:opacity .8s,visibility .8s;z-index:5}
+.loader.hide{opacity:0;visibility:hidden}
+.card{width:min(320px,86vw);padding:30px 24px;text-align:center;border-radius:22px;background:rgba(255,255,255,.04);border:1px solid rgba(236,72,153,.22);box-shadow:0 0 50px rgba(190,50,140,.15);backdrop-filter:blur(6px)}
+.card .ico{font-size:46px;line-height:1}
+.card h1{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:2rem;margin:10px 0 18px}
+.bar{height:6px;border-radius:6px;background:rgba(255,255,255,.1);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ec4899,#a855f7)}
+.status{font-size:.8rem;color:var(--dim);margin:10px 0 20px;min-height:1.2em}
+button{width:100%;padding:14px;border:0;border-radius:12px;font:600 .8rem 'Inter';letter-spacing:.14em;color:#fff;background:rgba(255,255,255,.07);opacity:.5;transition:.4s}
+button:not(:disabled){opacity:1;background:linear-gradient(90deg,#ec4899,#a855f7);box-shadow:0 8px 24px rgba(236,72,153,.35);cursor:pointer}
+.msg{text-align:center;max-width:340px;margin-top:12px;opacity:0;transform:translateY(10px);transition:opacity 1.4s,transform 1.4s}
+body.text .msg{opacity:1;transform:none}
+.msg p{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.6rem;line-height:1.4;margin:0 0 14px}
+.msg .sig{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.3rem;letter-spacing:.04em;color:var(--dim)}
+</style></head><body>
+<div class="glow"></div>
+<div class="loader" id="loader"><div class="card"><div class="ico">🌷</div><h1>For You</h1>
+<div class="bar"><i id="fill"></i></div><div class="status" id="status">Folding the paper …</div>
+<button id="btn" disabled>TAP TO BLOOM</button></div></div>
+<div class="view" id="view"><div class="hint">drag to turn the bouquet</div></div>
+<div class="msg"><p>Tulips wait all year to open once. I’d open for you every single time. Happy Birthday, My Love. May your day go as you deem fit.</p><div class="sig">— ASHVEN</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+var view=document.getElementById('view'),B=document.body;
+var R=new THREE.WebGLRenderer({antialias:true,alpha:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));R.outputEncoding=THREE.sRGBEncoding;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.15;
+view.insertBefore(R.domElement,view.firstChild);
+var S=new THREE.Scene(),cam=new THREE.PerspectiveCamera(35,1,.1,100);
+function fit(){var w=view.clientWidth,h=view.clientHeight;R.setSize(w,h);cam.aspect=w/h;
+  var d=Math.max(8,7.4/cam.aspect)/(2*Math.tan(cam.fov*Math.PI/360));cam.position.set(0,2.2,d);cam.lookAt(0,-.7,0);cam.updateProjectionMatrix()}
+fit();addEventListener('resize',fit);
+S.add(new THREE.HemisphereLight(0xffeef5,0x3a1a3a,.95));
+var key=new THREE.DirectionalLight(0xfff0e6,1.15);key.position.set(3,6,5);S.add(key);
+var rim=new THREE.DirectionalLight(0xff8fd0,.7);rim.position.set(-5,3,-4);S.add(rim);
+var pl=new THREE.PointLight(0xff7ab6,0,12);pl.position.set(0,2.5,2);S.add(pl);
+var bq=new THREE.Group();S.add(bq);bq.visible=false;
+function M(c,r,x){var o={color:c,roughness:r==null?.6:r,side:THREE.DoubleSide};for(var k in x)o[k]=x[k];return new THREE.MeshStandardMaterial(o)}
+function mesh(g,m,x,y,z){var o=new THREE.Mesh(g,m);o.position.set(x||0,y||0,z||0);return o}
+function tex(w,h,fn){var c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;return t}
+
+// ---- petal surface ----
+function petalGeo(W,H){
+  var nu=16,nv=10,P=[],C=[],I=[];
+  for(var i=0;i<=nu;i++){var u=i/nu,w=W*Math.pow(Math.sin(Math.PI*Math.pow(u,.72)),.8);
+    for(var j=0;j<=nv;j++){var v=j/nv*2-1,x=v*w,
+      z=.2*H*Math.sin(u*2.3)-.24*H*v*v*Math.min(1,u*3)*(w/W),
+      y=u*H-.06*H*v*v;
+      P.push(x,y,z);var sh=.8+.28*Math.sin(Math.min(1,u*1.3)*Math.PI*.5)-.1*Math.abs(v)*u;
+      var wh=Math.max(0,.3-u)*1.6;C.push(Math.min(1,sh+wh),Math.min(1,sh+wh*.9),Math.min(1,sh+wh*.9));}}
+  for(i=0;i<nu;i++)for(j=0;j<nv;j++){var a=i*(nv+1)+j,b=a+nv+1;I.push(a,b,a+1,b,b+1,a+1)}
+  var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(C,3));g.setIndex(I);g.computeVertexNormals();return g}
+var GO=petalGeo(.5,1.25),GI=petalGeo(.44,1.12);
+var PINKS=[0xf0a3b9,0xf5b6c5,0xe88fab];
+var stemM=M(0x4d7f53,.55),stamM=M(0xd8c25a,.5);
+
+// ---- tulips ----
+var Bp=new THREE.Vector3(0,-2.6,0),tulips=[],T=[[0,1.15,0,.5],[1.1,.85,.2,.3],[.35,.8,1.05,.6],[-.9,.85,.7,.2],[-1.05,.85,-.5,.8],[.5,.8,-1.0,.4],
+ [2.0,.35,.5,.9],[1.1,.3,1.8,.1],[-1.4,.3,1.6,.7],[-2.1,.3,-.4,.55],[.2,.35,-2.0,.35],[1.7,.35,-1.1,.65]];
+T.forEach(function(t,n){
+  var P=new THREE.Vector3(t[0],t[1],t[2]),d=P.clone().sub(Bp),len=d.length();d.normalize();
+  var q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d);
+  var stem=mesh(new THREE.CylinderGeometry(.05,.06,len,8),stemM);stem.position.copy(Bp).add(P).multiplyScalar(.5);stem.quaternion.copy(q);bq.add(stem);
+  var holder=new THREE.Group();holder.position.copy(P);holder.quaternion.copy(q);bq.add(holder);
+  var head=new THREE.Group();head.scale.setScalar(.001);holder.add(head);
+  var mat=M(PINKS[n%3],.38,{vertexColors:true,emissive:0x40101c,emissiveIntensity:.25});
+  var pets=[];
+  for(var i=0;i<6;i++){var inn=i%2,pv=new THREE.Group();pv.rotation.y=i*Math.PI/3;
+    var p=mesh(inn?GI:GO,mat);p.position.z=inn?.1:.17;pv.add(p);head.add(pv);pets.push([p,inn])}
+  head.add(mesh(new THREE.SphereGeometry(.07,10,8),stamM,0,.35,0));
+  tulips.push({head:head,pets:pets,d:t[3],ph:n});
+});
+
+// ---- baby's breath + eucalyptus (kept clear of the flowers) ----
+var HC=T.map(function(t){var P=new THREE.Vector3(t[0],t[1],t[2]);return P.clone().add(P.clone().sub(Bp).normalize().multiplyScalar(.6))});
+function free(x,y,z,m){for(var i=0;i<HC.length;i++){var dx=x-HC[i].x,dy=y-HC[i].y,dz=z-HC[i].z;if(dx*dx+dy*dy+dz*dz<m*m)return false}return true}
+var sd=7;function rnd(){sd=(sd*9301+49297)%233280;return sd/233280}
+var sprigs=[],tries=0,up=new THREE.Vector3(0,1,0),gmat=M(0x6f9a6f,.6);
+while(sprigs.length<20&&tries<900){tries++;
+  var a0=rnd()*6.283,r0=1.1+rnd()*2.2,y0=.75+rnd()*.55,x0=Math.cos(a0)*r0,z0=Math.sin(a0)*r0;
+  if(!free(x0,y0,z0,1.05))continue;
+  var ok=true;for(var q=0;q<sprigs.length;q++){var e=sprigs[q];if(Math.pow(e[0]-x0,2)+Math.pow(e[2]-z0,2)<.55){ok=false;break}}
+  if(ok)sprigs.push([x0,y0,z0])}
+var gm=new THREE.InstancedMesh(new THREE.SphereGeometry(.05,8,6),new THREE.MeshStandardMaterial({color:0xfffdf6,roughness:.7}),sprigs.length*10),dm=new THREE.Object3D(),gn=0;
+sprigs.forEach(function(p){
+  var top=new THREE.Vector3(p[0],p[1],p[2]),bot=new THREE.Vector3(p[0]*.5,.0,p[2]*.5),dv=top.clone().sub(bot),st=mesh(new THREE.CylinderGeometry(.014,.014,dv.length(),5),gmat);
+  st.position.copy(top).add(bot).multiplyScalar(.5);st.quaternion.setFromUnitVectors(up,dv.normalize());bq.add(st);
+  for(var k=0;k<10;k++){var bx=p[0]+(rnd()-.5)*.5,by=p[1]+(rnd()-.3)*.34,bz=p[2]+(rnd()-.5)*.5;
+    if(!free(bx,by,bz,.62))continue;dm.position.set(bx,by,bz);dm.scale.setScalar(.75+rnd()*.5);dm.updateMatrix();gm.setMatrixAt(gn++,dm.matrix)}});
+gm.count=gn;bq.add(gm);
+var lm=M(0x86a78a,.5);
+for(var i=0;i<6;i++){var la=i*1.047+.3,l=mesh(new THREE.SphereGeometry(1,16,12),lm,Math.cos(la)*2.75,.7,Math.sin(la)*2.75);
+  l.scale.set(.34,.42,.04);l.rotation.order='YXZ';l.rotation.set(-.7,Math.PI/2-la,0);bq.add(l)}
+
+// ---- wrapping paper ----
+function paper(rt,rb,h,col,seed,folds,y,rot){
+  var g=new THREE.CylinderGeometry(rt,rb,h,72,14,true),p=g.attributes.position;
+  for(var i=0;i<p.count;i++){var x=p.getX(i),z=p.getZ(i),yy=p.getY(i),th=Math.atan2(z,x),yn=(yy+h/2)/h,
+    k=1+(.07*Math.sin(folds*th+seed)+.03*Math.sin(folds*2.3*th+seed*2))*(.3+yn*.7);
+    p.setX(i,x*k);p.setZ(i,z*k);if(yn>.99)p.setY(i,yy+.22*Math.sin(3*th+seed)+.09*Math.sin(8*th));}
+  g.computeVertexNormals();var m=mesh(g,M(col,.9));m.position.y=y;m.rotation.y=rot;return m}
+bq.add(paper(3.0,.55,3.3,0xcbbfae,1.3,5,-1.25,.6));
+bq.add(paper(2.55,.45,3.6,0xefe4d3,.4,6,-1.45,0));
+// rounded, gathered bottom instead of a pointed tip
+var capA=mesh(new THREE.SphereGeometry(.55,24,16),M(0xcbbfae,.9),0,-2.95,0);capA.scale.set(1,.5,1);bq.add(capA);
+var capB=mesh(new THREE.SphereGeometry(.5,24,16),M(0xefe4d3,.9),0,-3.3,0);capB.scale.set(1,.7,1);bq.add(capB);
+var rg=mesh(new THREE.TorusGeometry(.46,.1,10,40),M(0xefe4d3,.9),0,-3.2,0);rg.rotation.x=Math.PI/2;bq.add(rg);
+// ribbon + bow
+var rb=M(0xf8f5ef,.35);
+var band=mesh(new THREE.TorusGeometry(1.05,.065,10,72),rb,0,-2.3,0);band.rotation.x=Math.PI/2;band.scale.set(1,1,1.5);bq.add(band);
+[-1,1].forEach(function(s){
+  var lp=mesh(new THREE.TorusGeometry(.3,.05,8,28),rb,s*.3,-2.26,1.13);lp.scale.set(.85,1.15,1);lp.rotation.z=s*.35;bq.add(lp);
+  var tt=tex(64,200,function(c,w,h){c.fillStyle='#f8f5ef';c.fillRect(0,0,w,h);c.fillStyle='#8d8374';c.font='600 15px Inter,sans-serif';c.translate(w/2,h/2);c.rotate(-Math.PI/2);c.textAlign='center';c.textBaseline='middle';c.fillText('MY BEAUTIFUL GIRL',0,0)});
+  var g=new THREE.PlaneGeometry(.3,.85);g.translate(0,-.425,0);var tl=mesh(g,new THREE.MeshStandardMaterial({map:tt,roughness:.35,side:THREE.DoubleSide}),s*.16,-2.32,1.1);tl.rotation.set(-.12,0,s*.2);bq.add(tl)});
+bq.add(mesh(new THREE.SphereGeometry(.13,12,10),rb,0,-2.28,1.17));
+// card
+var ct=tex(256,176,function(c,w,h){c.fillStyle='#fbf8f2';c.fillRect(0,0,w,h);c.fillStyle='#4a4036';c.textAlign='center';c.font='600 21px Inter,sans-serif';c.fillText('MY BEAUTIFUL',w/2,70);c.fillText('GIRL',w/2,100);c.fillStyle='#e08fa5';c.font='26px sans-serif';c.fillText('♥',w/2,140)});
+var card=mesh(new THREE.BoxGeometry(1.1,.78,.02),[M(0xe8e0d4),M(0xe8e0d4),M(0xe8e0d4),M(0xe8e0d4),new THREE.MeshStandardMaterial({map:ct,roughness:.8}),M(0xe8e0d4)],1.55,1.7,-1.1);
+card.rotation.set(-.1,-.3,-.32);bq.add(card);
+
+// ---- falling petals ----
+var fm=new THREE.MeshStandardMaterial({color:0xf3a9bf,roughness:.5,side:THREE.DoubleSide,transparent:true}),falls=[];
+for(i=0;i<22;i++){var f=mesh(GI,fm.clone());f.scale.setScalar(.16);f.visible=false;S.add(f);falls.push({m:f,life:0,vx:0,vr:0})}
+
+// ---- interaction ----
+var ry=0,vry=0,drag=false,lx=0,t0=-1,started=false;
+R.domElement.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX;R.domElement.style.cursor='grabbing'});
+addEventListener('pointerup',function(){drag=false;R.domElement.style.cursor='grab'});
+addEventListener('pointermove',function(e){if(!drag)return;vry=(e.clientX-lx)*.008;ry+=vry;lx=e.clientX});
+function ease(x){return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2}
+function back(x){var c=1.70158;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)}
+function cl(x){return Math.max(0,Math.min(1,x))}
+var clock=new THREE.Clock(),nf=0;
+function loop(){
+  requestAnimationFrame(loop);var t=clock.getElapsedTime();
+  if(!started){R.render(S,cam);return}
+  var s=t-t0;
+  if(!drag){vry*=.95;ry+=vry+.0016}
+  bq.rotation.y=ry+Math.sin(t*.4)*.12;
+  var ap=ease(cl(s/1.4));bq.scale.setScalar(.9+.1*ap);bq.position.y=-.5*(1-ap);
+  var open=0;
+  tulips.forEach(function(tl){
+    var pop=cl((s-.6-tl.d)/.9),e=ease(cl((s-2.6-tl.d)/2.2));open=Math.max(open,e);
+    tl.head.scale.setScalar(Math.max(.001,back(pop)));
+    tl.head.rotation.z=Math.sin(t*.9+tl.ph)*.03*e;tl.head.rotation.x=Math.cos(t*.8+tl.ph)*.025*e;
+    tl.pets.forEach(function(p,i){var o=p[1]?.26:.44;p[0].rotation.x=-.08+(o+.08)*e+Math.sin(t*1.2+i)*.015*e;});
+  });
+  pl.intensity=open*1.6;
+  if(s>5.2)spawn(t);
+  falls.forEach(function(f){if(!f.m.visible)return;f.life+=.016;var m=f.m;m.position.y-=.022;m.position.x+=f.vx+Math.sin(t*2+f.vr)*.004;m.rotation.x+=f.vr;m.rotation.z+=f.vr*.7;m.material.opacity=Math.min(1,f.life*2)*(1-cl((f.life-3)/1.2));if(f.life>4.2)m.visible=false});
+  R.render(S,cam);
+}
+var nextSpawn=0;
+function spawn(t){if(t<nextSpawn||matchMedia('(prefers-reduced-motion:reduce)').matches)return;nextSpawn=t+.8;
+  for(var i=0;i<falls.length;i++)if(!falls[i].m.visible){var f=falls[i];f.m.visible=true;f.life=0;f.vx=(Math.random()-.5)*.01;f.vr=(Math.random()-.5)*.06;
+    f.m.position.set((Math.random()-.5)*4,2.6+Math.random(),(Math.random()-.3)*2.5);return}}
+loop();
+
+// ---- loader ----
+var fill=document.getElementById('fill'),status=document.getElementById('status'),btn=document.getElementById('btn'),p=0;
+var msgs=[[0,'Folding the paper …'],[35,'Gathering the tulips …'],[70,'Tying the ribbon …']];
+var iv=setInterval(function(){p+=2.2;if(p>=100){p=100;clearInterval(iv);status.textContent='Ready to bloom!';btn.disabled=false}
+  else msgs.forEach(function(m){if(p>=m[0])status.textContent=m[1]});fill.style.width=p+'%'},60);
+btn.addEventListener('click',function(){
+  document.getElementById('loader').classList.add('hide');
+  bq.visible=true;started=true;t0=clock.getElapsedTime();
+  setTimeout(function(){B.classList.add('bloomed')},2800);
+  setTimeout(function(){B.classList.add('text')},5200);
+},{once:true});
+})();
+</script></body></html>
